@@ -12,6 +12,7 @@ import ipdb
 ### layers###
 #--------------
 
+
 #GCN layer
 class GraphConvolution(Module):
     """
@@ -40,22 +41,25 @@ class GraphConvolution(Module):
         output = torch.spmm(adj, support)
         #for 3_D batch, need a loop!!!
 
-
         if self.bias is not None:
             return output + self.bias
         else:
             return output
 
+
 #Multihead attention layer
-class MultiHead(Module):#currently, allowed for only one sample each time. As no padding mask is required.
+class MultiHead(
+    Module
+):  #currently, allowed for only one sample each time. As no padding mask is required.
+
     def __init__(
         self,
         input_dim,
         num_heads,
         kdim=None,
         vdim=None,
-        embed_dim = 128,#should equal num_heads*head dim
-        v_embed_dim = None,
+        embed_dim=128,  #should equal num_heads*head dim
+        v_embed_dim=None,
         dropout=0.1,
         bias=True,
     ):
@@ -74,16 +78,15 @@ class MultiHead(Module):#currently, allowed for only one sample each time. As no
             self.head_dim * num_heads == self.embed_dim
         ), "embed_dim must be divisible by num_heads"
 
-        assert self.v_embed_dim % num_heads ==0, "v_embed_dim must be divisible by num_heads"
+        assert self.v_embed_dim % num_heads == 0, "v_embed_dim must be divisible by num_heads"
 
-        self.scaling = self.head_dim ** -0.5
-
+        self.scaling = self.head_dim**-0.5
 
         self.q_proj = nn.Linear(self.input_dim, self.embed_dim, bias=bias)
         self.k_proj = nn.Linear(self.kdim, self.embed_dim, bias=bias)
         self.v_proj = nn.Linear(self.vdim, self.v_embed_dim, bias=bias)
 
-        self.out_proj = nn.Linear(self.v_embed_dim, self.v_embed_dim//self.num_heads, bias=bias)
+        self.out_proj = nn.Linear(self.v_embed_dim, self.v_embed_dim // self.num_heads, bias=bias)
 
         self.reset_parameters()
 
@@ -139,10 +142,19 @@ class MultiHead(Module):#currently, allowed for only one sample each time. As no
         q = q * self.scaling
 
         #compute attention
-        q = q.view(batch_num, node_num, self.num_heads, self.head_dim).transpose(-2,-3).contiguous().view(batch_num*self.num_heads, node_num, self.head_dim)
-        k = k.view(batch_num, node_num, self.num_heads, self.head_dim).transpose(-2,-3).contiguous().view(batch_num*self.num_heads, node_num, self.head_dim)
-        v = v.view(batch_num, node_num, self.num_heads, self.vdim).transpose(-2,-3).contiguous().view(batch_num*self.num_heads, node_num, self.vdim)
-        attn_output_weights = torch.bmm(q, k.transpose(-1,-2))
+        q = q.view(batch_num, node_num, self.num_heads,
+                   self.head_dim).transpose(-2, -3).contiguous().view(
+                       batch_num * self.num_heads, node_num, self.head_dim
+                   )
+        k = k.view(batch_num, node_num, self.num_heads,
+                   self.head_dim).transpose(-2, -3).contiguous().view(
+                       batch_num * self.num_heads, node_num, self.head_dim
+                   )
+        v = v.view(batch_num, node_num, self.num_heads,
+                   self.vdim).transpose(-2, -3).contiguous().view(
+                       batch_num * self.num_heads, node_num, self.vdim
+                   )
+        attn_output_weights = torch.bmm(q, k.transpose(-1, -2))
         attn_output_weights = F.softmax(attn_output_weights, dim=-1)
 
         #drop out
@@ -150,12 +162,13 @@ class MultiHead(Module):#currently, allowed for only one sample each time. As no
 
         #collect output
         attn_output = torch.bmm(attn_output_weights, v)
-        attn_output = attn_output.view(batch_num, self.num_heads, node_num, self.vdim).transpose(-2,-3).contiguous().view(batch_num, node_num, self.v_embed_dim)
+        attn_output = attn_output.view(batch_num, self.num_heads, node_num, self.vdim).transpose(
+            -2, -3
+        ).contiguous().view(batch_num, node_num, self.v_embed_dim)
         attn_output = self.out_proj(attn_output)
 
-
         if need_weights:
-            attn_output_weights = attn_output_weights #view: (batch_num, num_heads, node_num, node_num)
+            attn_output_weights = attn_output_weights  #view: (batch_num, num_heads, node_num, node_num)
             return attn_output, attn_output_weights.sum(dim=1) / self.num_heads
         else:
             return attn_output
@@ -170,7 +183,7 @@ class SageConv(Module):
     def __init__(self, in_features, out_features, bias=False):
         super(SageConv, self).__init__()
 
-        self.proj = nn.Linear(in_features*2, out_features, bias=bias)
+        self.proj = nn.Linear(in_features * 2, out_features, bias=bias)
 
         self.reset_parameters()
 
@@ -192,21 +205,27 @@ class SageConv(Module):
         #fuse info from neighbors. to be added:
         if not isinstance(adj, torch.sparse.FloatTensor):
             if len(adj.shape) == 3:
-                neigh_feature = torch.bmm(adj, features) / (adj.sum(dim=1).reshape((adj.shape[0], adj.shape[1],-1))+1)
+                neigh_feature = torch.bmm(
+                    adj, features
+                ) / (adj.sum(dim=1).reshape((adj.shape[0], adj.shape[1], -1)) + 1)
             else:
-                neigh_feature = torch.mm(adj, features) / (adj.sum(dim=1).reshape(adj.shape[0], -1)+1)
+                neigh_feature = torch.mm(adj,
+                                         features) / (adj.sum(dim=1).reshape(adj.shape[0], -1) + 1)
         else:
             #print("spmm not implemented for batch training. Note!")
-            
-            neigh_feature = torch.spmm(adj, features) / (adj.to_dense().sum(dim=1).reshape(adj.shape[0], -1)+1)
+
+            neigh_feature = torch.spmm(adj, features
+                                      ) / (adj.to_dense().sum(dim=1).reshape(adj.shape[0], -1) + 1)
 
         #perform conv
-        data = torch.cat([features,neigh_feature], dim=-1)
+        data = torch.cat([features, neigh_feature], dim=-1)
         combined = self.proj(data)
 
         return combined
 
+
 #GraphAT layers
+
 
 class GraphAttentionLayer(nn.Module):
     """
@@ -223,7 +242,7 @@ class GraphAttentionLayer(nn.Module):
 
         self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        self.a = nn.Parameter(torch.zeros(size=(2*out_features, 1)))
+        self.a = nn.Parameter(torch.zeros(size=(2 * out_features, 1)))
         nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
@@ -235,10 +254,11 @@ class GraphAttentionLayer(nn.Module):
         h = torch.mm(input, self.W)
         N = h.size()[0]
 
-        a_input = torch.cat([h.repeat(1, N).view(N * N, -1), h.repeat(N, 1)], dim=1).view(N, -1, 2 * self.out_features)
+        a_input = torch.cat([h.repeat(1, N).view(N * N, -1),
+                             h.repeat(N, 1)], dim=1).view(N, -1, 2 * self.out_features)
         e = self.leakyrelu(torch.matmul(a_input, self.a).squeeze(2))
 
-        zero_vec = -9e15*torch.ones_like(e)
+        zero_vec = -9e15 * torch.ones_like(e)
         attention = torch.where(adj > 0, e, zero_vec)
         attention = F.softmax(attention, dim=1)
         attention = F.dropout(attention, self.dropout, training=self.training)
@@ -250,11 +270,13 @@ class GraphAttentionLayer(nn.Module):
             return h_prime
 
     def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.out_features) + ')'
+        return self.__class__.__name__ + ' (' + str(self.in_features
+                                                   ) + ' -> ' + str(self.out_features) + ')'
 
 
 class SpecialSpmmFunction(torch.autograd.Function):
     """Special function for only sparse region backpropataion layer."""
+
     @staticmethod
     def forward(ctx, indices, values, shape, b):
         assert indices.requires_grad == False
@@ -277,10 +299,11 @@ class SpecialSpmmFunction(torch.autograd.Function):
 
 
 class SpecialSpmm(nn.Module):
+
     def forward(self, indices, values, shape, b):
         return SpecialSpmmFunction.apply(indices, values, shape, b)
 
-    
+
 class SpGraphAttentionLayer(nn.Module):
     """
     Sparse version GAT layer, similar to https://arxiv.org/abs/1710.10903
@@ -295,8 +318,8 @@ class SpGraphAttentionLayer(nn.Module):
 
         self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
         nn.init.xavier_normal_(self.W.data, gain=1.414)
-                
-        self.a = nn.Parameter(torch.zeros(size=(1, 2*out_features)))
+
+        self.a = nn.Parameter(torch.zeros(size=(1, 2 * out_features)))
         nn.init.xavier_normal_(self.a.data, gain=1.414)
 
         self.dropout = nn.Dropout(dropout)
@@ -321,7 +344,9 @@ class SpGraphAttentionLayer(nn.Module):
         assert not torch.isnan(edge_e).any()
         # edge_e: E
 
-        e_rowsum = self.special_spmm(edge, edge_e, torch.Size([N, N]), torch.ones(size=(N,1), device=dv))
+        e_rowsum = self.special_spmm(
+            edge, edge_e, torch.Size([N, N]), torch.ones(size=(N, 1), device=dv)
+        )
         # e_rowsum: N x 1
 
         edge_e = self.dropout(edge_e)
@@ -330,7 +355,7 @@ class SpGraphAttentionLayer(nn.Module):
         h_prime = self.special_spmm(edge, edge_e, torch.Size([N, N]), h)
         assert not torch.isnan(h_prime).any()
         # h_prime: N x out
-        
+
         h_prime = h_prime.div(e_rowsum)
         # h_prime: N x out
         assert not torch.isnan(h_prime).any()
@@ -343,17 +368,18 @@ class SpGraphAttentionLayer(nn.Module):
             return h_prime
 
     def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.out_features) + ')'
-
-
+        return self.__class__.__name__ + ' (' + str(self.in_features
+                                                   ) + ' -> ' + str(self.out_features) + ')'
 
 
 #--------------
 ### models ###
 #--------------
 
+
 #gcn_encode
 class GCN_En(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout):
         super(GCN_En, self).__init__()
 
@@ -366,7 +392,9 @@ class GCN_En(nn.Module):
 
         return x
 
+
 class GCN_En2(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout):
         super(GCN_En2, self).__init__()
 
@@ -381,7 +409,9 @@ class GCN_En2(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         return x
 
+
 class GCN_Classifier(nn.Module):
+
     def __init__(self, nembed, nhid, nclass, dropout):
         super(GCN_Classifier, self).__init__()
 
@@ -392,7 +422,7 @@ class GCN_Classifier(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.mlp.weight,std=0.05)
+        nn.init.normal_(self.mlp.weight, std=0.05)
 
     def forward(self, x, adj):
         x = F.relu(self.gc1(x, adj))
@@ -401,9 +431,12 @@ class GCN_Classifier(nn.Module):
 
         return x
 
+
 #sage model
 
+
 class Sage_En(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout):
         super(Sage_En, self).__init__()
 
@@ -415,7 +448,9 @@ class Sage_En(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         return x
 
+
 class Sage_En2(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout):
         super(Sage_En2, self).__init__()
 
@@ -431,7 +466,9 @@ class Sage_En2(nn.Module):
 
         return x
 
+
 class Sage_Classifier(nn.Module):
+
     def __init__(self, nembed, nhid, nclass, dropout):
         super(Sage_Classifier, self).__init__()
 
@@ -442,7 +479,7 @@ class Sage_Classifier(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.mlp.weight,std=0.05)
+        nn.init.normal_(self.mlp.weight, std=0.05)
 
     def forward(self, x, adj):
         x = F.relu(self.sage1(x, adj))
@@ -454,11 +491,16 @@ class Sage_Classifier(nn.Module):
 
 #GAT model
 
+
 class GAT_En(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout, alpha=0.2, nheads=8):
         super(GAT_En, self).__init__()
 
-        self.attentions = [GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True) for _ in range(nheads)]
+        self.attentions = [
+            GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True)
+            for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
@@ -468,7 +510,7 @@ class GAT_En(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.out_proj.weight,std=0.05)
+        nn.init.normal_(self.out_proj.weight, std=0.05)
 
     def forward(self, x, adj):
 
@@ -478,19 +520,26 @@ class GAT_En(nn.Module):
 
         return x
 
+
 class GAT_En2(nn.Module):
+
     def __init__(self, nfeat, nhid, nembed, dropout, alpha=0.2, nheads=8):
         super(GAT_En2, self).__init__()
 
-        
-        self.attentions = [GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True) for _ in range(nheads)]
+        self.attentions = [
+            GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True)
+            for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
         self.out_proj = nn.Linear(nhid * nheads, nembed)
         self.dropout = dropout
 
-        self.attentions_2 = [GraphAttentionLayer(nembed, nembed, dropout=dropout, alpha=alpha, concat=True) for _ in range(nheads)]
+        self.attentions_2 = [
+            GraphAttentionLayer(nembed, nembed, dropout=dropout, alpha=alpha, concat=True)
+            for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions_2):
             self.add_module('attention2_{}'.format(i), attention)
 
@@ -499,9 +548,8 @@ class GAT_En2(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.out_proj.weight,std=0.05)
-        nn.init.normal_(self.out_proj_2.weight,std=0.05)
-
+        nn.init.normal_(self.out_proj.weight, std=0.05)
+        nn.init.normal_(self.out_proj_2.weight, std=0.05)
 
     def forward(self, x, adj):
         x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
@@ -512,12 +560,16 @@ class GAT_En2(nn.Module):
         x = F.elu(self.out_proj_2(x))
         return x
 
+
 class GAT_Classifier(nn.Module):
+
     def __init__(self, nembed, nhid, nclass, dropout, alpha=0.2, nheads=8):
         super(GAT_Classifier, self).__init__()
 
-        
-        self.attentions = [GraphAttentionLayer(nembed, nhid, dropout=dropout, alpha=alpha, concat=True) for _ in range(nheads)]
+        self.attentions = [
+            GraphAttentionLayer(nembed, nhid, dropout=dropout, alpha=alpha, concat=True)
+            for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
@@ -530,8 +582,8 @@ class GAT_Classifier(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.mlp.weight,std=0.05)
-        nn.init.normal_(self.out_proj.weight,std=0.05)
+        nn.init.normal_(self.mlp.weight, std=0.05)
+        nn.init.normal_(self.out_proj.weight, std=0.05)
 
     def forward(self, x, adj):
         x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
@@ -543,6 +595,7 @@ class GAT_Classifier(nn.Module):
 
 
 class Classifier(nn.Module):
+
     def __init__(self, nembed, nhid, nclass, dropout):
         super(Classifier, self).__init__()
 
@@ -552,12 +605,13 @@ class Classifier(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.mlp.weight,std=0.05)
+        nn.init.normal_(self.mlp.weight, std=0.05)
 
     def forward(self, x, adj):
         x = self.mlp(x)
 
         return x
+
 
 class Decoder(Module):
     """
@@ -572,16 +626,13 @@ class Decoder(Module):
 
         self.reset_parameters()
 
-
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.de_weight.size(1))
         self.de_weight.data.uniform_(-stdv, stdv)
 
-
     def forward(self, node_embed):
-        
+
         combine = F.linear(node_embed, self.de_weight)
-        adj_out = torch.sigmoid(torch.mm(combine, combine.transpose(-1,-2)))
+        adj_out = torch.sigmoid(torch.mm(combine, combine.transpose(-1, -2)))
 
         return adj_out
-
