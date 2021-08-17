@@ -38,7 +38,7 @@ elif args.dataset == 'BlogCatalog':
     im_class_num = 14  #set it to be the number less than 100
     class_sample_num = 20  #not used
 elif args.dataset == 'twitter':
-    adj, features, labels = data_load.load_sub_data_twitter()
+    adj, features, labels = data_load.load_data_twitter()
     im_class_num = 1
     class_sample_num = 20  #not used
 else:
