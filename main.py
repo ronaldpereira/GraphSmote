@@ -1,7 +1,7 @@
 import time
 import argparse
 import numpy as np
-
+from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -320,7 +320,7 @@ if args.load is not None:
     load_model(args.load)
 
 t_total = time.time()
-for epoch in range(args.epochs):
+for epoch in tqdm(range(args.epochs)):
     train(epoch)
 
     if epoch % 10 == 0:

@@ -1,5 +1,6 @@
-ipdb
-torch
-scipy
-sklearn
-networkx
+ipdb==0.13.9
+torch==1.9.0
+scipy==1.7.1
+scikit-learn==0.24.2
+networkx==2.6.2
+tqdm==4.62.1

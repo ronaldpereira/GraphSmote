@@ -153,7 +153,7 @@ def load_data_twitter():
     )
     adj = np.array(adj.todense())
     adj = adj[1:, 1:]
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    adj = adj + adj.T * (adj.T > adj) - adj * (adj.T > adj)
     adj = adj.tocoo()
 
     fake_node = np.sort(fake_node)
