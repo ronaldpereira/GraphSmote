@@ -365,7 +365,7 @@ def recon_upsample(embed, labels, idx_train, adj=None, portion=1.0, im_class_num
 
             interp_place = random.random()
             new_embed = embed[
-                chosen, :] + (embed[idx_neighbor, :] - embed[chosen, :]) * interp_place
+                chosen, :] + (chosen_embed[idx_neighbor, :] - embed[chosen, :]) * interp_place
 
             new_labels = labels.new(torch.Size((chosen.shape[0], 1))
                                    ).reshape(-1).fill_(c_largest - i)
